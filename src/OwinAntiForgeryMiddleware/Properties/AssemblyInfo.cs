@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("OwinAntiForgeryMiddleware")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("OWIN middleware for extracting and validating anti-forgery (CSRF) token in requests")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Huysentruit Wouter")]
 [assembly: AssemblyProduct("OwinAntiForgeryMiddleware")]
-[assembly: AssemblyCopyright("Copyright ©  2018")]
+[assembly: AssemblyCopyright("Copyright ©  2018 Huysentruit Wouter")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
