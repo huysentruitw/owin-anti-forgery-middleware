@@ -16,7 +16,7 @@ You can also configure the middleware to ignore certain authentication types, f.
 
 # Register the middleware
 
-In its simplest form, only a extractor lambda needs to be passed no extra parameters are required as the defaults will fit many simple projects:
+In its simplest form, only a extractor lambda needs to be passed as the other defaults will fit for most projects:
 
 ```C#
 public class Startup
