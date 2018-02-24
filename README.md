@@ -1,5 +1,7 @@
 # OWIN Anti-Forgery (CSRF) middleware
 
+[![Build status](https://ci.appveyor.com/api/projects/status/0dbfw8s2iyvvegfh/branch/master?svg=true)](https://ci.appveyor.com/project/huysentruitw/owin-anti-forgery-middleware/branch/master)
+
 OWIN middleware for extracting and validating anti-forgery (CSRF) token in requests.
 
 This middleware must be used in combination with the OWIN CookieAuthenticationMiddleware, the idea is that you add a crypto-secure random token as a claim to that authentication cookie and that you pass a `ExpectedTokenExtractor` method to the AntiForgeryMiddleware.
