@@ -36,7 +36,15 @@ namespace OwinAntiForgeryMiddleware
         {
             if (context.Request.Method == "GET" && context.Request.Path.Equals(_options.TokenRequestEndpoint))
             {
-                await context.Response.WriteAsync(_options.ExpectedTokenExtractor(context));
+                var token = _options.ExpectedTokenExtractor(context);
+                if (string.IsNullOrEmpty(token))
+                {
+                    context.Response.StatusCode = _options.FailureStatusCode;
+                    await context.Response.WriteAsync("Could not extract expected anti-forgery token");
+                    return;
+                }
+
+                await context.Response.WriteAsync(token);
                 return;
             }
 

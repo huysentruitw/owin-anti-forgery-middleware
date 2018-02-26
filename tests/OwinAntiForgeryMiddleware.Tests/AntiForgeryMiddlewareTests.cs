@@ -39,6 +39,36 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
+        public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnBadRequest()
+        {
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/auth/token");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+            }
+
+            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/auth/token");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+            }
+        }
+
+        [Test]
         public async Task AntiForgeryMiddleware_SafeMethodWithoutToken_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
@@ -332,6 +362,38 @@ namespace OwinAntiForgeryMiddleware.Tests
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Ambiguous));
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnBadRequest()
+        {
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+            }
+
+            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
             }
         }
     }
