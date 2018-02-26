@@ -35,23 +35,17 @@ namespace OwinAntiForgeryMiddleware
 
         public override async Task Invoke(IOwinContext context)
         {
-            var expectedToken = ExtractExpectedTokenFromCookie(context.Request);
-            if (expectedToken == null)
+            if (context.Request.Method == "GET" && context.Request.Path.Equals(_options.TokenRequestEndpoint))
             {
-                expectedToken = _options.ExpectedTokenFactory();
-                if (string.IsNullOrEmpty(expectedToken))
+                var token = _options.ExpectedTokenFactory();
+                if (string.IsNullOrEmpty(token))
                 {
                     context.Response.StatusCode = _options.FailureStatusCode;
                     await context.Response.WriteAsync($"{nameof(AntiForgeryMiddlewareOptions.ExpectedTokenFactory)} did not return a token");
                     return;
                 }
-
-                AppendExpectedTokenAsCookie(context.Response, expectedToken, context.Request.IsSecure);
-            }
-
-            if (context.Request.Method == "GET" && context.Request.Path.Equals(_options.TokenRequestEndpoint))
-            {
-                await context.Response.WriteAsync(expectedToken);
+                AppendExpectedTokenAsCookie(context.Response, token, context.Request.IsSecure);
+                await context.Response.WriteAsync(token);
                 return;
             }
 
@@ -88,6 +82,14 @@ namespace OwinAntiForgeryMiddleware
                     await context.Response.WriteAsync("Referer missing in secure request");
                     return;
                 }
+            }
+
+            var expectedToken = ExtractExpectedTokenFromCookie(context.Request);
+            if (string.IsNullOrEmpty(expectedToken))
+            {
+                context.Response.StatusCode = _options.FailureStatusCode;
+                await context.Response.WriteAsync("Could not extract expected anti-forgery token");
+                return;
             }
 
             var actualToken = context.Request.Headers.Get(_options.HeaderName);
