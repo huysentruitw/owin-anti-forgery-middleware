@@ -26,7 +26,7 @@ namespace OwinAntiForgeryMiddleware
             public static readonly int FailureStatusCode = 400;
             public static readonly string[] FormContentTypes = { "application/x-www-form-urlencoded", "multipart/form-data" };
             public static readonly string FormFieldName = "csrf_token";
-            public static readonly string HeaderName = "CSRF-Token";
+            public static readonly string HeaderName = "X-CSRF-Token";
             public static readonly bool RefererRequiredForSecureRequests = true;
             public static readonly string[] SafeMethods = { "GET", "HEAD", "OPTIONS", "TRACE" };
             public static readonly PathString TokenRequestEndpoint = new PathString("/auth/token");

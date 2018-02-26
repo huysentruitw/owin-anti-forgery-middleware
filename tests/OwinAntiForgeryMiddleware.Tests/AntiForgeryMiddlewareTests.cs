@@ -70,7 +70,7 @@ namespace OwinAntiForgeryMiddleware.Tests
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("No anti-forgery token found in CSRF-Token header"));
+                Assert.That(error, Is.EqualTo("No anti-forgery token found in X-CSRF-Token header"));
             }
         }
 
@@ -106,7 +106,7 @@ namespace OwinAntiForgeryMiddleware.Tests
                 var response = await server.HttpClient.PostAsync("/some/nonsafe/path", new StringContent(string.Empty));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("No anti-forgery token found in CSRF-Token header"));
+                Assert.That(error, Is.EqualTo("No anti-forgery token found in X-CSRF-Token header"));
             }
         }
 
@@ -144,7 +144,7 @@ namespace OwinAntiForgeryMiddleware.Tests
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("No anti-forgery token found in CSRF-Token header"));
+                Assert.That(error, Is.EqualTo("No anti-forgery token found in X-CSRF-Token header"));
             }
         }
 
@@ -181,7 +181,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             using (var client = server.HttpClient)
             {
                 client.DefaultRequestHeaders.Referrer = new Uri("https://some.referer.com");
-                client.DefaultRequestHeaders.Add("CSRF-Token", token);
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
                 var response = await client.PostAsync("https://localhost/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
             }
@@ -200,7 +200,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
-                client.DefaultRequestHeaders.Add("CSRF-Token", token);
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
                 var response = await client.PostAsync("https://localhost/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
             }
@@ -219,7 +219,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
-                client.DefaultRequestHeaders.Add("CSRF-Token", token);
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
                 var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
             }
@@ -238,7 +238,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
-                client.DefaultRequestHeaders.Add("CSRF-Token", "wrongtoken");
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", "wrongtoken");
                 var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
