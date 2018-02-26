@@ -4,9 +4,13 @@
 
 OWIN middleware for extracting and validating anti-forgery (CSRF) token in requests.
 
-This middleware must be used in combination with the OWIN CookieAuthenticationMiddleware, the idea is that you add a crypto-secure random token as a claim to that authentication cookie and that you pass a `ExpectedTokenExtractor` method to the AntiForgeryMiddleware.
+This middleware validates an incoming CSRF token in a request header against the expected CSRF token stored in a HttpOnly cookie.
 
-This middleware exposes an endpoint at which the client can get the CSRF token. For each non-safe request method (configurable), like POST/DELETE/PUT/..., the client needs to pass the CSRF token as a header or form value (header name and form field name is configurable).
+When a request is made without expected CSRF token cookie, a new token will be generated and appended as HttpOnly cookie to the response.
+
+As a consequence, the first request within each browser session should always be a safe http method (preferably a GET) as a POST without CSRF token will be blocked.
+
+This middleware also exposes an endpoint from which the client can get the CSRF token. For each non-safe request method (configurable), like POST/DELETE/PUT/..., the client needs to pass the CSRF token as a header or form value (header name and form field name is configurable).
 
 If the CSRF token is missing or doesn't match, a configurable failure code will be returned to the client.
 
@@ -18,7 +22,7 @@ You can also configure the middleware to ignore certain authentication types, f.
 
 # Register the middleware
 
-In its simplest form, only a extractor lambda needs to be passed as the other defaults will fit for most projects:
+In its simplest form, no additional options need to be passed as the defaults will fit for most projects:
 
 ```C#
 public class Startup
@@ -27,10 +31,7 @@ public class Startup
     {
         app.UseCookieAuthenticationMiddleware(...);
 
-        app.UseAntiForgeryMiddleware(new AntiForgeryMiddlewareOptions
-        {
-            ExpectedTokenExtractor = ctx => ctx.Authentication.User?.Claims.FirstOrDefault(x => x.Type.Equals("csrf_token"))?.Value
-        });
+        app.UseAntiForgeryMiddleware(new AntiForgeryMiddlewareOptions());
 
         // other middleware registrations...
         app.UseWebApi();

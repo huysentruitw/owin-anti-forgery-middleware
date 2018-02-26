@@ -7,21 +7,41 @@ namespace OwinAntiForgeryMiddleware.Tests
     public class AntiForgeryMiddlewareOptionsTests
     {
         [Test]
-        public void Validate_ExpectedTokenExtractorIsNull_ShouldThrowException()
+        public void Validate_CookieDataProtectorIsNull_ShouldThrowException()
         {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = null };
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = null };
             var ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
-            Assert.That(ex.ParamName, Is.EqualTo("ExpectedTokenExtractor"));
+            Assert.That(ex.ParamName, Is.EqualTo("CookieDataProtector"));
+        }
+
+        [Test]
+        public void Validate_CookieNameIsNullOrEmpty_ShouldThrowException()
+        {
+            var options = new AntiForgeryMiddlewareOptions { CookieName = null };
+            var ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
+            Assert.That(ex.ParamName, Is.EqualTo("CookieName"));
+
+            options = new AntiForgeryMiddlewareOptions { CookieName = string.Empty };
+            ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
+            Assert.That(ex.ParamName, Is.EqualTo("CookieName"));
+        }
+
+        [Test]
+        public void Validate_ExpectedTokenFactoryIsNull_ShouldThrowException()
+        {
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = null };
+            var ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
+            Assert.That(ex.ParamName, Is.EqualTo("ExpectedTokenFactory"));
         }
 
         [Test]
         public void Validate_FormFieldNameIsNullOrEmpty_ShouldThrowException()
         {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty, FormFieldName = null };
+            var options = new AntiForgeryMiddlewareOptions { FormFieldName = null };
             var ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
             Assert.That(ex.ParamName, Is.EqualTo("FormFieldName"));
 
-            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty, FormFieldName = string.Empty };
+            options = new AntiForgeryMiddlewareOptions { FormFieldName = string.Empty };
             ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
             Assert.That(ex.ParamName, Is.EqualTo("FormFieldName"));
         }
@@ -29,11 +49,11 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public void Validate_HeaderNameIsNullOrEmpty_ShouldThrowException()
         {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty, HeaderName = null };
+            var options = new AntiForgeryMiddlewareOptions { HeaderName = null };
             var ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
             Assert.That(ex.ParamName, Is.EqualTo("HeaderName"));
 
-            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty, HeaderName = string.Empty };
+            options = new AntiForgeryMiddlewareOptions { HeaderName = string.Empty };
             ex = Assert.Throws<ArgumentNullException>(() => options.Validate());
             Assert.That(ex.ParamName, Is.EqualTo("HeaderName"));
         }

@@ -16,6 +16,7 @@
 
 using System;
 using Microsoft.Owin;
+using Microsoft.Owin.Security.DataProtection;
 
 namespace OwinAntiForgeryMiddleware
 {
@@ -23,7 +24,9 @@ namespace OwinAntiForgeryMiddleware
     {
         public static class Defaults
         {
-            public static readonly int ExpectedTokenMissingStatusCode = 401;
+            public static readonly IDataProtector CookieDataProtector = new DpapiDataProtectionProvider(typeof(AntiForgeryMiddleware).Namespace).Create(nameof(AntiForgeryMiddleware), "v1");
+            public static readonly string CookieName = "CSRF";
+            public static readonly Func<string> ExpectedTokenFactory = () => Guid.NewGuid().ToString("N");
             public static readonly int FailureStatusCode = 400;
             public static readonly string[] FormContentTypes = { "application/x-www-form-urlencoded", "multipart/form-data" };
             public static readonly string FormFieldName = "csrf_token";
@@ -33,10 +36,10 @@ namespace OwinAntiForgeryMiddleware
             public static readonly PathString TokenRequestEndpoint = new PathString("/auth/token");
         }
 
-        public Func<IOwinContext, string> ExpectedTokenExtractor { get; set; }
-        public int ExpectedTokenMissingStatusCode { get; set; } = Defaults.ExpectedTokenMissingStatusCode;
+        public IDataProtector CookieDataProtector { get; set; } = Defaults.CookieDataProtector;
+        public string CookieName { get; set; } = Defaults.CookieName;
+        public Func<string> ExpectedTokenFactory { get; set; } = Defaults.ExpectedTokenFactory;
         public int FailureStatusCode { get; set; } = Defaults.FailureStatusCode;
-
         public string[] FormContentTypes { get; set; } = Defaults.FormContentTypes;
         public string FormFieldName { get; set; } = Defaults.FormFieldName;
         public string HeaderName { get; set; } = Defaults.HeaderName;
@@ -48,7 +51,9 @@ namespace OwinAntiForgeryMiddleware
 
         public void Validate()
         {
-            if (ExpectedTokenExtractor == null) throw new ArgumentNullException(nameof(ExpectedTokenExtractor));
+            if (CookieDataProtector == null) throw new ArgumentNullException(nameof(CookieDataProtector));
+            if (string.IsNullOrEmpty(CookieName)) throw new ArgumentNullException(nameof(CookieName));
+            if (ExpectedTokenFactory == null) throw new ArgumentNullException(nameof(ExpectedTokenFactory));
             if (string.IsNullOrEmpty(FormFieldName)) throw new ArgumentNullException(nameof(FormFieldName));
             if (string.IsNullOrEmpty(HeaderName)) throw new ArgumentNullException(nameof(HeaderName));
         }

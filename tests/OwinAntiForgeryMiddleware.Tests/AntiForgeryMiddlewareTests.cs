@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Owin;
+using Microsoft.Owin.Security.DataProtection;
 using Microsoft.Owin.Testing;
+using Moq;
 using NUnit.Framework;
 using Owin;
 
@@ -17,15 +21,16 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public void AntiForgeryMiddleware_UseMiddleware_ShouldValidateOptions()
         {
-            var ex = Assert.Throws<TargetInvocationException>(() => TestServer.Create(app => app.Use<AntiForgeryMiddleware>(new AntiForgeryMiddlewareOptions())));
-            Assert.That((ex?.InnerException as ArgumentNullException)?.ParamName, Is.EqualTo("ExpectedTokenExtractor"));
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = null };
+            var ex = Assert.Throws<TargetInvocationException>(() => TestServer.Create(app => app.Use<AntiForgeryMiddleware>(options)));
+            Assert.That((ex?.InnerException as ArgumentNullException)?.ParamName, Is.EqualTo("ExpectedTokenFactory"));
         }
 
         [Test]
         public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ShouldReturnExpectedToken()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, TokenRequestEndpoint = new PathString("/fancyendpoint") };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token, TokenRequestEndpoint = new PathString("/fancyendpoint") };
 
             using (var server = TestServer.Create(app =>
             {
@@ -39,9 +44,9 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnUnauthorized()
+        public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ExpectedTokenFactoryReturnsNullOrEmptyString_ShouldReturnBadRequest()
         {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => null };
 
             using (var server = TestServer.Create(app =>
             {
@@ -49,10 +54,12 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
 
-            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
+            options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => string.Empty };
 
             using (var server = TestServer.Create(app =>
             {
@@ -60,15 +67,16 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
         }
 
         [Test]
         public async Task AntiForgeryMiddleware_SafeMethodWithoutToken_ShouldReturnOk()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafeMethods = new[] { "GET" } };
+            var options = new AntiForgeryMiddlewareOptions { SafeMethods = new[] { "GET" } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -82,10 +90,35 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
+        public async Task AntiForgeryMiddleware_SafeMethodWithoutToken_ShouldAppendCookie()
+        {
+            var dataProtectorMock = new Mock<IDataProtector>();
+            dataProtectorMock.Setup(x => x.Protect(It.IsAny<byte[]>())).Returns(Encoding.UTF8.GetBytes("CookieData"));
+            var options = new AntiForgeryMiddlewareOptions
+            {
+                SafeMethods = new[] { "GET" },
+                CookieName = "Brownie",
+                CookieDataProtector = dataProtectorMock.Object
+            };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/test");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+                var setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.Not.Null, "No cookie set");
+                Assert.That(setCookie, Is.EqualTo("Brownie=Q29va2llRGF0YQ%3D%3D; path=/; HttpOnly"));
+            }
+        }
+
+        [Test]
         public async Task AntiForgeryMiddleware_NonSafeMethodWithoutToken_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafeMethods = new[] { "GET" } };
+            var options = new AntiForgeryMiddlewareOptions { SafeMethods = new[] { "GET" } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -103,8 +136,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_SafePathWithoutToken_ShouldReturnOk()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafePaths = new[] { new PathString("/some/safe/path") } };
+            var options = new AntiForgeryMiddlewareOptions { SafePaths = new[] { new PathString("/some/safe/path") } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -120,8 +152,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_NonSafePathWithoutToken_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafePaths = new[] { new PathString("/some/safe/path") } };
+            var options = new AntiForgeryMiddlewareOptions { SafePaths = new[] { new PathString("/some/safe/path") } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -139,8 +170,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_SafeAuthenticationType_ShouldReturnOk()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafeAuthenticationTypes = new[] { "jwt" } };
+            var options = new AntiForgeryMiddlewareOptions { SafeAuthenticationTypes = new[] { "jwt" } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -157,8 +187,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_NonSafeAuthenticationType_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafeAuthenticationTypes = new[] { "cookie" } };
+            var options = new AntiForgeryMiddlewareOptions { SafeAuthenticationTypes = new[] { "cookie" } };
 
             using (var server = TestServer.Create(app =>
             {
@@ -177,8 +206,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_SecureRequestWithoutReferer_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions();
 
             using (var server = TestServer.Create(app =>
             {
@@ -197,7 +225,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_SecureRequestWithReferer_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token };
 
             using (var server = TestServer.Create(app =>
             {
@@ -217,7 +245,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_SecureRequestWithoutReferer_ButOptionDisabled_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, RefererRequiredForSecureRequests = false };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token, RefererRequiredForSecureRequests = false };
 
             using (var server = TestServer.Create(app =>
             {
@@ -236,7 +264,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_TokenHeaderMatchesExpectedToken_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token };
 
             using (var server = TestServer.Create(app =>
             {
@@ -254,8 +282,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_TokenHeaderDoesNotMatchExpectedToken_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => "correcttoken" };
 
             using (var server = TestServer.Create(app =>
             {
@@ -276,7 +303,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_TokenFormFieldMatchesExpectedToken_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token };
 
             using (var server = TestServer.Create(app =>
             {
@@ -292,8 +319,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_TokenFormFieldDoesNotMatchExpectedToken_ShouldReturnBadRequest()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => "correcttoken" };
 
             using (var server = TestServer.Create(app =>
             {
@@ -312,7 +338,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_NonDefaultHeaderName_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, HeaderName = "blabla" };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token, HeaderName = "blabla" };
 
             using (var server = TestServer.Create(app =>
             {
@@ -331,7 +357,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         public async Task AntiForgeryMiddleware_NonDefaultFormFieldName_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, FormFieldName = "blablabla" };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => token, FormFieldName = "blablabla" };
 
             using (var server = TestServer.Create(app =>
             {
@@ -347,8 +373,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_NonDefaultFailedStatusCode_ShouldReturnFailedStatusCode()
         {
-            var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, FailureStatusCode = (int)HttpStatusCode.Ambiguous };
+            var options = new AntiForgeryMiddlewareOptions { FailureStatusCode = (int)HttpStatusCode.Ambiguous };
 
             using (var server = TestServer.Create(app =>
             {
@@ -362,9 +387,9 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnUnauthorized()
+        public async Task AntiForgeryMiddleware_ExpectedTokenFactoryReturnsNullOrEmptyString_ShouldReturnBadRequest()
         {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => null };
 
             using (var server = TestServer.Create(app =>
             {
@@ -373,10 +398,12 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
 
-            options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
+            options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => string.Empty };
 
             using (var server = TestServer.Create(app =>
             {
@@ -385,7 +412,9 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
         }
     }
