@@ -39,8 +39,9 @@ namespace OwinAntiForgeryMiddleware
         public string FormFieldName { get; set; } = Defaults.FormFieldName;
         public string HeaderName { get; set; } = Defaults.HeaderName;
         public bool RefererRequiredForSecureRequests { get; set; } = Defaults.RefererRequiredForSecureRequests;
-        public string[] SafeMethods { get; set; } = Defaults.SafeMethods;
         public string[] SafeAuthenticationTypes { get; set; }
+        public string[] SafeMethods { get; set; } = Defaults.SafeMethods;
+        public PathString[] SafePaths { get; set; }
         public PathString TokenRequestEndpoint { get; set; } = Defaults.TokenRequestEndpoint;
 
         public void Validate()

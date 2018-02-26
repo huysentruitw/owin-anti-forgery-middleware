@@ -46,6 +46,12 @@ namespace OwinAntiForgeryMiddleware
                 return;
             }
 
+            if (_options.SafePaths != null && _options.SafePaths.Contains(context.Request.Path))
+            {
+                await Next.Invoke(context);
+                return;
+            }
+
             if (context.Authentication.User?.Identities != null && (_options.SafeAuthenticationTypes?.Any() ?? false))
             {
                 var safeAuthenticationTypes = context.Authentication.User.Identities.Select(x => x.AuthenticationType)

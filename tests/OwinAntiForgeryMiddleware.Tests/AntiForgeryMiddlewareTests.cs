@@ -75,6 +75,42 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
+        public async Task AntiForgeryMiddleware_SafePathWithoutToken_ShouldReturnOk()
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafePaths = new[] { new PathString("/some/safe/path") } };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.PostAsync("/some/safe/path", new StringContent(string.Empty));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_NonSafePathWithoutToken_ShouldReturnBadRequest()
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => token, SafePaths = new[] { new PathString("/some/safe/path") } };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.PostAsync("/some/nonsafe/path", new StringContent(string.Empty));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("No anti-forgery token found in CSRF-Token header"));
+            }
+        }
+
+        [Test]
         public async Task AntiForgeryMiddleware_SafeAuthenticationType_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
