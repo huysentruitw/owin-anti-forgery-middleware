@@ -23,6 +23,7 @@ namespace OwinAntiForgeryMiddleware
     {
         public static class Defaults
         {
+            public static readonly int ExpectedTokenMissingStatusCode = 401;
             public static readonly int FailureStatusCode = 400;
             public static readonly string[] FormContentTypes = { "application/x-www-form-urlencoded", "multipart/form-data" };
             public static readonly string FormFieldName = "csrf_token";
@@ -33,6 +34,7 @@ namespace OwinAntiForgeryMiddleware
         }
 
         public Func<IOwinContext, string> ExpectedTokenExtractor { get; set; }
+        public int ExpectedTokenMissingStatusCode { get; set; } = Defaults.ExpectedTokenMissingStatusCode;
         public int FailureStatusCode { get; set; } = Defaults.FailureStatusCode;
 
         public string[] FormContentTypes { get; set; } = Defaults.FormContentTypes;

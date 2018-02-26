@@ -39,8 +39,7 @@ namespace OwinAntiForgeryMiddleware
                 var token = _options.ExpectedTokenExtractor(context);
                 if (string.IsNullOrEmpty(token))
                 {
-                    context.Response.StatusCode = _options.FailureStatusCode;
-                    await context.Response.WriteAsync("Could not extract expected anti-forgery token");
+                    context.Response.StatusCode = _options.ExpectedTokenMissingStatusCode;
                     return;
                 }
 
@@ -86,8 +85,7 @@ namespace OwinAntiForgeryMiddleware
             var expectedToken = _options.ExpectedTokenExtractor(context);
             if (string.IsNullOrEmpty(expectedToken))
             {
-                context.Response.StatusCode = _options.FailureStatusCode;
-                await context.Response.WriteAsync("Could not extract expected anti-forgery token");
+                context.Response.StatusCode = _options.ExpectedTokenMissingStatusCode;
                 return;
             }
 

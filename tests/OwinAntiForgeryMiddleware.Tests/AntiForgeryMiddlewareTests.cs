@@ -39,7 +39,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnBadRequest()
+        public async Task AntiForgeryMiddleware_GetRequestToTokenRequestEndpoint_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnUnauthorized()
         {
             var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
 
@@ -49,9 +49,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             }
 
             options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
@@ -62,9 +60,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             }
         }
 
@@ -366,7 +362,7 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnBadRequest()
+        public async Task AntiForgeryMiddleware_ExpectedTokenExtractorReturnsNullOrEmptyString_ShouldReturnUnauthorized()
         {
             var options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => null };
 
@@ -377,9 +373,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             }
 
             options = new AntiForgeryMiddlewareOptions { ExpectedTokenExtractor = _ => string.Empty };
@@ -391,9 +385,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             }
         }
     }
