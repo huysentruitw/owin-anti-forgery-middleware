@@ -101,13 +101,12 @@ namespace OwinAntiForgeryMiddleware.Tests
         [Test]
         public async Task AntiForgeryMiddleware_RequestExpectedToken_ShouldAppendCookie()
         {
-            var dataProtectorMock = new Mock<IDataProtector>();
-            dataProtectorMock.Setup(x => x.Protect(It.IsAny<byte[]>())).Returns(Encoding.UTF8.GetBytes("CookieData"));
             var options = new AntiForgeryMiddlewareOptions
             {
                 SafeMethods = new[] { "GET" },
                 CookieName = "Brownie",
-                CookieDataProtector = dataProtectorMock.Object
+                CookieDataProtector = _dataProtectorMock.Object,
+                ExpectedTokenFactory = () => "CookieData"
             };
 
             using (var server = TestServer.Create(app =>
@@ -117,10 +116,116 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             {
                 var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+                var content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("CookieData"));
                 var setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
                 Assert.That(setCookie, Is.Not.Null, "No cookie set");
                 Assert.That(setCookie, Is.EqualTo("Brownie=Q29va2llRGF0YQ%3D%3D; path=/; HttpOnly"));
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_RequestExpectedTokenTwice_NoTokenCookieInRequest_ShouldReturnTwoDifferentTokens()
+        {
+            var tokenQueue = new Queue<string>(new[] { "AAAA", "ZZZZ" });
+            var options = new AntiForgeryMiddlewareOptions
+            {
+                SafeMethods = new[] { "GET" },
+                CookieName = "Brownie",
+                CookieDataProtector = _dataProtectorMock.Object,
+                ExpectedTokenFactory = () => tokenQueue.Dequeue()
+            };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            using (var client = server.HttpClient)
+            {
+                var response = await client.GetAsync("/auth/token");
+                var content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("AAAA"));
+                var setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.EqualTo("Brownie=QUFBQQ%3D%3D; path=/; HttpOnly"));
+
+                response = await client.GetAsync("/auth/token");
+                content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("ZZZZ"));
+                setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.EqualTo("Brownie=WlpaWg%3D%3D; path=/; HttpOnly"));
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_RequestExpectedTokenTwice_WithTokenCookieInSecondRequest_ShouldReturnSameTokenTwice()
+        {
+            var tokenQueue = new Queue<string>(new[] { "AAAA", "ZZZZ" });
+            var options = new AntiForgeryMiddlewareOptions
+            {
+                SafeMethods = new[] { "GET" },
+                CookieName = "Brownie",
+                CookieDataProtector = _dataProtectorMock.Object,
+                ExpectedTokenFactory = () => tokenQueue.Dequeue()
+            };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            using (var client = server.HttpClient)
+            {
+                var response = await client.GetAsync("/auth/token");
+                var content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("AAAA"));
+                var setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.EqualTo("Brownie=QUFBQQ%3D%3D; path=/; HttpOnly"));
+
+                client.DefaultRequestHeaders.Add("Cookie", "Brownie=QUFBQQ%3D%3D");
+
+                response = await client.GetAsync("/auth/token");
+                content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("AAAA"));
+                setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.EqualTo("Brownie=QUFBQQ%3D%3D; path=/; HttpOnly"));
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_RequestExpectedToken_ExpectedTokenFactoryReturnsNullOrEmptyString_ShouldReturnBadRequest()
+        {
+            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => null };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/auth/token");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
+            }
+
+            options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => string.Empty };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/auth/token");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
         }
 
@@ -409,38 +514,6 @@ namespace OwinAntiForgeryMiddleware.Tests
             {
                 var response = await server.HttpClient.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Ambiguous));
-            }
-        }
-
-        [Test]
-        public async Task AntiForgeryMiddleware_GetTokenRequestEndpoint_ExpectedTokenFactoryReturnsNullOrEmptyString_ShouldReturnBadRequest()
-        {
-            var options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => null };
-
-            using (var server = TestServer.Create(app =>
-            {
-                app.Use<AntiForgeryMiddleware>(options);
-                app.Use((ctx, next) => Task.CompletedTask);
-            }))
-            {
-                var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
-            }
-
-            options = new AntiForgeryMiddlewareOptions { ExpectedTokenFactory = () => string.Empty };
-
-            using (var server = TestServer.Create(app =>
-            {
-                app.Use<AntiForgeryMiddleware>(options);
-                app.Use((ctx, next) => Task.CompletedTask);
-            }))
-            {
-                var response = await server.HttpClient.GetAsync("/auth/token");
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-                var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("ExpectedTokenFactory did not return a token"));
             }
         }
 

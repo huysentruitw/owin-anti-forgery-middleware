@@ -35,17 +35,25 @@ namespace OwinAntiForgeryMiddleware
 
         public override async Task Invoke(IOwinContext context)
         {
+            var expectedToken = ExtractExpectedTokenFromCookie(context.Request);
+
+            context.Response.Headers.Add("Vary", new[] { "Cookie" });
+
             if (context.Request.Method == "GET" && context.Request.Path.Equals(_options.TokenRequestEndpoint))
             {
-                var token = _options.ExpectedTokenFactory();
-                if (string.IsNullOrEmpty(token))
+                if (string.IsNullOrEmpty(expectedToken))
                 {
-                    context.Response.StatusCode = _options.FailureStatusCode;
-                    await context.Response.WriteAsync($"{nameof(AntiForgeryMiddlewareOptions.ExpectedTokenFactory)} did not return a token");
-                    return;
+                    expectedToken = _options.ExpectedTokenFactory();
+                    if (string.IsNullOrEmpty(expectedToken))
+                    {
+                        context.Response.StatusCode = _options.FailureStatusCode;
+                        await context.Response.WriteAsync($"{nameof(AntiForgeryMiddlewareOptions.ExpectedTokenFactory)} did not return a token");
+                        return;
+                    }
                 }
-                AppendExpectedTokenAsCookie(context.Response, token, context.Request.IsSecure);
-                await context.Response.WriteAsync(token);
+
+                AppendExpectedTokenAsCookie(context.Response, expectedToken, context.Request.IsSecure);
+                await context.Response.WriteAsync(expectedToken);
                 return;
             }
 
@@ -84,7 +92,6 @@ namespace OwinAntiForgeryMiddleware
                 }
             }
 
-            var expectedToken = ExtractExpectedTokenFromCookie(context.Request);
             if (string.IsNullOrEmpty(expectedToken))
             {
                 context.Response.StatusCode = _options.FailureStatusCode;
