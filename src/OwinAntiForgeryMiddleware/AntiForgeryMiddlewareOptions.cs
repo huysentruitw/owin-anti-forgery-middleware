@@ -31,7 +31,6 @@ namespace OwinAntiForgeryMiddleware
             public static readonly string[] FormContentTypes = { "application/x-www-form-urlencoded", "multipart/form-data" };
             public static readonly string FormFieldName = "csrf_token";
             public static readonly string HeaderName = "X-CSRF-Token";
-            public static readonly bool RefererRequiredForSecureRequests = true;
             public static readonly string[] SafeMethods = { "GET", "HEAD", "OPTIONS", "TRACE" };
             public static readonly PathString TokenRequestEndpoint = new PathString("/auth/token");
         }
@@ -43,7 +42,7 @@ namespace OwinAntiForgeryMiddleware
         public string[] FormContentTypes { get; set; } = Defaults.FormContentTypes;
         public string FormFieldName { get; set; } = Defaults.FormFieldName;
         public string HeaderName { get; set; } = Defaults.HeaderName;
-        public bool RefererRequiredForSecureRequests { get; set; } = Defaults.RefererRequiredForSecureRequests;
+        public Func<Uri, bool> OriginValidator { get; set; }
         public string[] SafeAuthenticationTypes { get; set; }
         public string[] SafeMethods { get; set; } = Defaults.SafeMethods;
         public PathString[] SafePaths { get; set; }

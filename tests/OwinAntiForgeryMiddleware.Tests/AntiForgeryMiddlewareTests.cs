@@ -241,6 +241,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", "CSRF=YQ==");
                 var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -277,6 +278,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", "CSRF=YQ==");
                 var response = await client.PostAsync("/some/nonsafe/path", new StringContent(string.Empty));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -315,6 +317,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", "CSRF=YQ==");
                 var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -324,28 +327,54 @@ namespace OwinAntiForgeryMiddleware.Tests
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_SecureRequestWithoutReferer_ShouldReturnBadRequest()
+        public async Task AntiForgeryMiddleware_RequestWithAllowedOrigin_ShouldReturnOk()
         {
-            var options = new AntiForgeryMiddlewareOptions();
+            var token = Guid.NewGuid().ToString("N");
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, OriginValidator = origin => origin.Equals(new Uri("http://localhost/")) };
 
             using (var server = TestServer.Create(app =>
             {
                 app.Use<AntiForgeryMiddleware>(options);
                 app.Use((ctx, next) => Task.CompletedTask);
             }))
+            using (var client = server.HttpClient)
             {
-                var response = await server.HttpClient.PostAsync("https://localhost/test", new StringContent("content"));
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
+                client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
+                var response = await client.PostAsync("/test", new StringContent("content"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_RequestWithDisallowedOrigin_ShouldReturnBadRequest()
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, OriginValidator = origin => origin.Equals(new Uri("http://localhost/")) };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            using (var client = server.HttpClient)
+            {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost:123");
+                client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
+                var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
-                Assert.That(error, Is.EqualTo("Referer missing in secure request"));
+                Assert.That(error, Is.EqualTo("Invalid Origin or Referer request header value"));
             }
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_SecureRequestWithReferer_ShouldReturnOk()
+        public async Task AntiForgeryMiddleware_RequestWithAllowedReferer_ShouldReturnOk()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object };
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, OriginValidator = origin => origin.Equals(new Uri("http://localhost:123/")) };
 
             using (var server = TestServer.Create(app =>
             {
@@ -354,19 +383,42 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
-                client.DefaultRequestHeaders.Referrer = new Uri("https://some.referer.com");
+                client.DefaultRequestHeaders.Add("Referer", "http://localhost:123");
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
                 client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
-                var response = await client.PostAsync("https://localhost/test", new StringContent("content"));
+                var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
             }
         }
 
         [Test]
-        public async Task AntiForgeryMiddleware_SecureRequestWithoutReferer_ButOptionDisabled_ShouldReturnOk()
+        public async Task AntiForgeryMiddleware_RequestWithDisallowedReferer_ShouldReturnBadRequest()
         {
             var token = Guid.NewGuid().ToString("N");
-            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, RefererRequiredForSecureRequests = false };
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, OriginValidator = origin => origin.Equals(new Uri("http://localhost:123/")) };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            using (var client = server.HttpClient)
+            {
+                client.DefaultRequestHeaders.Add("Referer", "https://localhost:123");
+                client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
+                client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
+                var response = await client.PostAsync("/test", new StringContent("content"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Invalid Origin or Referer request header value"));
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_RequestWithoutOriginOrReferer_ShouldReturnBadRequest()
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var options = new AntiForgeryMiddlewareOptions { CookieDataProtector = _dataProtectorMock.Object, OriginValidator = origin => origin.Equals(new Uri("http://localhost:123/")) };
 
             using (var server = TestServer.Create(app =>
             {
@@ -377,8 +429,10 @@ namespace OwinAntiForgeryMiddleware.Tests
             {
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
                 client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
-                var response = await client.PostAsync("https://localhost/test", new StringContent("content"));
-                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+                var response = await client.PostAsync("/test", new StringContent("content"));
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+                var error = await response.Content.ReadAsStringAsync();
+                Assert.That(error, Is.EqualTo("Origin and Referer request headers are both absent/empty"));
             }
         }
 
@@ -395,6 +449,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
                 client.DefaultRequestHeaders.Add("X-CSRF-Token", token);
                 var response = await client.PostAsync("/test", new StringContent("content"));
@@ -414,6 +469,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", "CSRF=YQ==");
                 client.DefaultRequestHeaders.Add("X-CSRF-Token", "actual");
                 var response = await client.PostAsync("/test", new StringContent("content"));
@@ -436,6 +492,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
                 var response = await client.PostAsync("/test", new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("csrf_token", token) }));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
@@ -454,6 +511,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", "CSRF=YQ==");
                 var response = await client.PostAsync("/test", new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("csrf_token", "actual") }));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -476,6 +534,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             using (var client = server.HttpClient)
             {
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("blabla", token);
                 var response = await client.PostAsync("/test", new StringContent("content"));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
@@ -495,6 +554,7 @@ namespace OwinAntiForgeryMiddleware.Tests
             }))
             using (var client = server.HttpClient)
             {
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
                 client.DefaultRequestHeaders.Add("Cookie", $"CSRF={Convert.ToBase64String(Encoding.UTF8.GetBytes(token))}");
                 var response = await client.PostAsync("/test", new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("blablabla", token) }));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
@@ -526,8 +586,10 @@ namespace OwinAntiForgeryMiddleware.Tests
             {
                 app.UseAntiForgeryMiddleware(options);
             }))
+            using (var client = server.HttpClient)
             {
-                var response = await server.HttpClient.PostAsync("/test", new StringContent(string.Empty));
+                client.DefaultRequestHeaders.Add("Origin", "http://localhost");
+                var response = await client.PostAsync("/test", new StringContent(string.Empty));
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
                 var error = await response.Content.ReadAsStringAsync();
                 Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));

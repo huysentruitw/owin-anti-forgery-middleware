@@ -81,15 +81,23 @@ namespace OwinAntiForgeryMiddleware
                 }
             }
 
-            if (context.Request.IsSecure && _options.RefererRequiredForSecureRequests)
+            var source = context.Request.Headers.Get("Origin");
+            if (string.IsNullOrEmpty(source))
             {
-                var referer = context.Request.Headers.Get("Referer");
-                if (string.IsNullOrEmpty(referer))
+                source = context.Request.Headers.Get("Referer");
+                if (string.IsNullOrEmpty(source))
                 {
                     context.Response.StatusCode = _options.FailureStatusCode;
-                    await context.Response.WriteAsync("Referer missing in secure request");
+                    await context.Response.WriteAsync("Origin and Referer request headers are both absent/empty");
                     return;
                 }
+            }
+
+            if (_options.OriginValidator != null && !_options.OriginValidator(new Uri(source)))
+            {
+                context.Response.StatusCode = _options.FailureStatusCode;
+                await context.Response.WriteAsync("Invalid Origin or Referer request header value");
+                return;
             }
 
             if (string.IsNullOrEmpty(expectedToken))
