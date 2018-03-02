@@ -595,5 +595,33 @@ namespace OwinAntiForgeryMiddleware.Tests
                 Assert.That(error, Is.EqualTo("Could not extract expected anti-forgery token"));
             }
         }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_CustomCookieDomain_RequestExpectedToken_ShouldAppendCookie()
+        {
+            var options = new AntiForgeryMiddlewareOptions
+            {
+                SafeMethods = new[] { "GET" },
+                CookieName = "Brownie",
+                CookieDataProtector = _dataProtectorMock.Object,
+                ExpectedTokenFactory = () => "CookieData",
+                CookieDomain = ".domain.com"
+            };
+
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(options);
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/auth/token");
+                var content = await response.Content.ReadAsStringAsync();
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
+                Assert.That(content, Is.EqualTo("CookieData"));
+                var setCookie = response.Headers.GetValues("Set-Cookie").FirstOrDefault();
+                Assert.That(setCookie, Is.Not.Null, "No cookie set");
+                Assert.That(setCookie, Is.EqualTo("Brownie=Q29va2llRGF0YQ%3D%3D; domain=.domain.com; path=/; HttpOnly"));
+            }
+        }
     }
 }

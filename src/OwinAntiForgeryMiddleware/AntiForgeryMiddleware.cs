@@ -161,6 +161,7 @@ namespace OwinAntiForgeryMiddleware
             var cookieValue = Convert.ToBase64String(cookieData);
             response.Cookies.Append(_options.CookieName, cookieValue, new CookieOptions
             {
+                Domain = _options.CookieDomain,
                 Expires = null,
                 HttpOnly = true,
                 Path = "/",

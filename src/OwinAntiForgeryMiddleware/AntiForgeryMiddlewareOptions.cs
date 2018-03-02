@@ -36,6 +36,7 @@ namespace OwinAntiForgeryMiddleware
         }
 
         public IDataProtector CookieDataProtector { get; set; } = Defaults.CookieDataProtector;
+        public string CookieDomain { get; set; }
         public string CookieName { get; set; } = Defaults.CookieName;
         public Func<string> ExpectedTokenFactory { get; set; } = Defaults.ExpectedTokenFactory;
         public int FailureStatusCode { get; set; } = Defaults.FailureStatusCode;
