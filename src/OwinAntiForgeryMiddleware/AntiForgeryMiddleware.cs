@@ -37,7 +37,7 @@ namespace OwinAntiForgeryMiddleware
         {
             var expectedToken = ExtractExpectedTokenFromCookie(context.Request);
 
-            context.Response.Headers.Add("Vary", new[] { "Cookie" });
+            AppendVaryHeaders(context.Response);
 
             if (context.Request.Method == "GET" && context.Request.Path.Equals(_options.TokenRequestEndpoint))
             {
@@ -167,6 +167,12 @@ namespace OwinAntiForgeryMiddleware
                 Path = "/",
                 Secure = secure
             });
+        }
+
+        private static void AppendVaryHeaders(IOwinResponse response)
+        {
+            if (!response.Headers.ContainsKey("Vary") || !response.Headers.GetValues("Vary").Contains("Cookie"))
+                response.Headers.Append("Vary", "Cookie");
         }
     }
 }

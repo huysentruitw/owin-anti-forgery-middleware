@@ -623,5 +623,67 @@ namespace OwinAntiForgeryMiddleware.Tests
                 Assert.That(setCookie, Is.EqualTo("Brownie=Q29va2llRGF0YQ%3D%3D; domain=.domain.com; path=/; HttpOnly"));
             }
         }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_ResponseWithoutVaryHeader_ShouldSetVaryHeader()
+        {
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use<AntiForgeryMiddleware>(new AntiForgeryMiddlewareOptions());
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/test");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(response.Headers.Vary, Is.Not.Null);
+                Assert.That(response.Headers.Vary.Count, Is.EqualTo(1));
+                Assert.That(response.Headers.Vary.Contains("Cookie"), Is.True);
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_ResponseWithExistingVaryHeader_ShouldAppendCookieInVaryHeader()
+        {
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use(async (ctx, next) =>
+                {
+                    ctx.Response.Headers.Append("Vary", "Test");
+                    await next();
+                });
+                app.Use<AntiForgeryMiddleware>(new AntiForgeryMiddlewareOptions());
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/test");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(response.Headers.Vary, Is.Not.Null);
+                Assert.That(response.Headers.Vary.Count, Is.EqualTo(2));
+                Assert.That(response.Headers.Vary.Contains("Test"), Is.True);
+                Assert.That(response.Headers.Vary.Contains("Cookie"), Is.True);
+            }
+        }
+
+        [Test]
+        public async Task AntiForgeryMiddleware_ResponseWithExistingCookieInVaryHeader_ShouldLeaveCookieInVaryHeader()
+        {
+            using (var server = TestServer.Create(app =>
+            {
+                app.Use(async (ctx, next) =>
+                {
+                    ctx.Response.Headers.Append("Vary", "Cookie");
+                    await next();
+                });
+                app.Use<AntiForgeryMiddleware>(new AntiForgeryMiddlewareOptions());
+                app.Use((ctx, next) => Task.CompletedTask);
+            }))
+            {
+                var response = await server.HttpClient.GetAsync("/test");
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(response.Headers.Vary, Is.Not.Null);
+                Assert.That(response.Headers.Vary.Count, Is.EqualTo(1));
+                Assert.That(response.Headers.Vary.Contains("Cookie"), Is.True);
+            }
+        }
     }
 }
